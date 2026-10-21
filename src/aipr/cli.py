@@ -369,10 +369,17 @@ In your PR description, include:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The console script (and the gh-aipr wrapper) call main() with no
+    # arguments, so argv is None: fall back to sys.argv[1:] before the
+    # fast-path check, otherwise `aipr init ...` never reaches the init
+    # subcommand. An explicit list (including []) is never overridden.
+    if argv is None:
+        argv = sys.argv[1:]
+
     # Fast-path: if first arg is "init", dispatch to init subcommand
     # before building the main parser (avoids argparse subparser conflicts
     # with "owner/repo" positional args).
-    if argv is not None and argv and argv[0] == "init":
+    if argv and argv[0] == "init":
         args = _parse_init_args(argv[1:])
         return _cmd_init(args)
 
