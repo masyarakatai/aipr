@@ -3,6 +3,7 @@
 import threading
 import time
 
+import aipr.cache as cache_module
 from aipr.cache import TTLCache
 
 
@@ -84,6 +85,26 @@ def test_cache_maxsize_eviction():
     assert cache.get("b") is not None
     assert cache.get("c") is not None
     assert cache.get("d") is not None
+
+
+def test_cache_non_positive_maxsize_does_not_crash_or_store():
+    """A disabled cache size must not try to evict from an empty cache."""
+    from aipr.detector import Policy, Verdict
+
+    policy = Policy(Verdict.HUMAN_ONLY, 1.0, [], 5.0)
+    for maxsize in (0, -1):
+        cache = TTLCache(ttl=60, maxsize=maxsize)
+        cache.put("key", policy)
+        assert len(cache) == 0
+
+
+def test_cache_size_env_rejects_non_positive_values(monkeypatch):
+    """Invalid cache sizes fall back to the safe default."""
+    monkeypatch.setenv("AIPR_CACHE_SIZE", "0")
+    assert cache_module._int_env("AIPR_CACHE_SIZE", 1024, minimum=1) == 1024
+
+    monkeypatch.setenv("AIPR_CACHE_SIZE", "-1")
+    assert cache_module._int_env("AIPR_CACHE_SIZE", 1024, minimum=1) == 1024
 
 
 def test_cache_thread_safety():
