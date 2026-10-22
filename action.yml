@@ -9,9 +9,9 @@ inputs:
     required: false
     default: 'false'
   cache-ttl:
-    description: 'Cache TTL in hours (default 24)'
+    description: 'Cache TTL in seconds (default 86400)'
     required: false
-    default: '24'
+    default: '86400'
   token:
     description: 'GitHub token for private repos or higher rate limits'
     required: false
