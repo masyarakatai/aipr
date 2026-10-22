@@ -105,7 +105,7 @@ def _score_text(text: str) -> Policy:
 
     for pattern, weight in RULES:
         try:
-            match = pattern.search(text, timeout=REGEX_TIMEOUT_MS)
+            match = pattern.search(text, timeout=REGEX_TIMEOUT_MS / 1000)
         except TimeoutError:
             continue
         if not match:

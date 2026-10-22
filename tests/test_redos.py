@@ -6,6 +6,7 @@ catastrophic backtracking (fixes #113).
 
 import time
 
+from aipr import detector
 from aipr.detector import detect_policy, Verdict, MAX_INPUT_LENGTH
 
 
@@ -67,6 +68,23 @@ def test_regex_timeout_caught_gracefully():
     text = "full ai-generated contributions are not allowed"
     result = detect_policy(text)
     assert result.verdict is Verdict.HUMAN_ONLY
+
+
+def test_regex_timeout_milliseconds_are_converted_to_seconds(monkeypatch):
+    """The regex module receives the configured timeout in seconds."""
+    observed_timeouts = []
+
+    class RecordingPattern:
+        def search(self, text, *, timeout):
+            observed_timeouts.append(timeout)
+            return None
+
+    monkeypatch.setattr(detector, "RULES", [(RecordingPattern(), 1.0)])
+
+    detector._score_text("text")
+
+    assert observed_timeouts == [detector.REGEX_TIMEOUT_MS / 1000]
+    assert observed_timeouts == [0.5]
 
 
 # --- Existing behavior preserved ---
