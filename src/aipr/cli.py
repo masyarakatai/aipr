@@ -152,7 +152,7 @@ def fetch_policy_text(repo: str, use_cache: bool = True) -> list[tuple[str, str]
             if text and text.strip():
                 results.append((f"{org}/.github/{name}", text))
                 break
-    if use_cache and results:
+    if use_cache:
         _cache_put(key, [(name, text) for name, text in results])
     return results
 

@@ -45,6 +45,43 @@ def test_expired_entry_refetches(tmp_path, monkeypatch):
     clear_cache()
 
 
+def test_empty_result_is_cached_and_reused(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIPR_CACHE_DIR", str(tmp_path))
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        return None
+
+    monkeypatch.setattr(cli_mod, "_fetch_gh", fake_fetch)
+
+    assert fetch_policy_text("owner/no-policy") == []
+    n_first = len(calls)
+    assert n_first > 0, "first call must hit the network"
+    assert fetch_policy_text("owner/no-policy") == []
+    assert len(calls) == n_first, "empty result must be served from the cache"
+    clear_cache()
+
+
+def test_expired_empty_result_refetches(tmp_path, monkeypatch):
+    monkeypatch.setenv("AIPR_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("AIPR_CACHE_TTL", "1")
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        return None
+
+    monkeypatch.setattr(cli_mod, "_fetch_gh", fake_fetch)
+
+    fetch_policy_text("owner/no-policy")
+    first_count = len(calls)
+    time.sleep(1.2)
+    fetch_policy_text("owner/no-policy")
+    assert len(calls) > first_count, "expired empty result must be refetched"
+    clear_cache()
+
+
 def test_no_cache_flag_bypasses(tmp_path, monkeypatch):
     monkeypatch.setenv("AIPR_CACHE_DIR", str(tmp_path))
     calls = []
@@ -193,4 +230,3 @@ def test_invalid_cache_env_vars_cli_and_defaults(monkeypatch, caplog):
     finally:
         monkeypatch.undo()
         importlib.reload(aipr.cache)
-
