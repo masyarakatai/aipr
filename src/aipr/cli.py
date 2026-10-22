@@ -12,6 +12,7 @@ Exit codes: 0 = autonomous-safe, 1 = not safe / restricted, 2 = unknown, 64 = us
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -82,6 +83,11 @@ def _cache_ttl() -> int:
     return _int_env("AIPR_CACHE_TTL", 86400)
 
 
+def _cache_key(repo: str) -> str:
+    """Return a stable, filesystem-safe key for a repository identifier."""
+    return hashlib.sha256(repo.encode("utf-8")).hexdigest()
+
+
 def clear_cache() -> None:
     """Delete every cached policy entry."""
     d = _cache_dir()
@@ -91,7 +97,7 @@ def clear_cache() -> None:
 
 
 def _cache_get(key: str):
-    path = _cache_dir() / f"{key}.json"
+    path = _cache_dir() / f"{_cache_key(key)}.json"
     try:
         entry = json.loads(path.read_text())
         if time.time() - entry["ts"] <= _cache_ttl():
@@ -105,7 +111,7 @@ def _cache_get(key: str):
 def _cache_put(key: str, files: list) -> None:
     d = _cache_dir()
     d.mkdir(parents=True, exist_ok=True)
-    path = d / f"{key}.json"
+    path = d / f"{_cache_key(key)}.json"
     try:
         path.write_text(json.dumps({"ts": time.time(), "files": files}))
     except OSError:
@@ -128,7 +134,7 @@ def fetch_policy_text(repo: str, use_cache: bool = True) -> list[tuple[str, str]
     Raises :class:`RateLimitError` if rate-limited by the GitHub API. In that case,
     no caching occurs — a later retry can succeed.
     """
-    key = repo.replace("/", "__")
+    key = repo
     if use_cache:
         cached = _cache_get(key)
         if cached is not None:

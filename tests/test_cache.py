@@ -5,7 +5,7 @@ import logging
 import time
 
 from aipr import cli as cli_mod
-from aipr.cli import main, fetch_policy_text, clear_cache, _cache_dir, _cache_get
+from aipr.cli import main, fetch_policy_text, clear_cache, _cache_dir, _cache_get, _cache_key
 
 
 def test_cache_stores_and_reuses(tmp_path, monkeypatch):
@@ -65,14 +65,14 @@ def test_corrupt_cache_entry_is_ignored(tmp_path, monkeypatch):
     """A corrupt cache entry must be ignored, not raised, and must not be served.
 
     The entry is written under the real cache key for "owner/repo-x"
-    (``repo.replace("/", "__")``), so ``_cache_get`` actually parses it. The
+    cache key, so ``_cache_get`` actually parses it. The
     corrupted JSON must be swallowed by the try/except, the network fetch must
     proceed, and the fetched result must overwrite the damaged entry.
     """
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     monkeypatch.setenv("AIPR_CACHE_DIR", str(cache_dir))
-    entry = cache_dir / "owner__repo-x.json"
+    entry = cache_dir / f"{_cache_key('owner/repo-x')}.json"
     entry.write_text("{corrupt")
     calls = []
 
@@ -118,7 +118,7 @@ def test_clear_cache_removes_dir(tmp_path, monkeypatch):
 
     clear_cache()
     assert not list(_cache_dir().glob("*.json")), "clear_cache() must delete every cache entry"
-    assert _cache_get("o__r") is None, "no cache entry may survive clear_cache()"
+    assert _cache_get("o/r") is None, "no cache entry may survive clear_cache()"
 
     # The cleared cache must miss, so the next call goes back to the network.
     n_before = len(calls)
@@ -126,12 +126,29 @@ def test_clear_cache_removes_dir(tmp_path, monkeypatch):
     assert len(calls) > n_before, "a cleared cache must not serve the previous entry"
 
 
+def test_cache_keys_are_stable_safe_and_collision_resistant(tmp_path, monkeypatch):
+    """Repository names must not escape the cache or alias one another."""
+    monkeypatch.setenv("AIPR_CACHE_DIR", str(tmp_path))
+    traversal = "../../tmp/cache-secret"
+    old_collision_a = "owner/repo__other"
+    old_collision_b = "owner__repo/other"
+
+    key = _cache_key(traversal)
+    assert key == _cache_key(traversal)
+    assert key.isalnum()
+    assert _cache_key(old_collision_a) != _cache_key(old_collision_b)
+
+    cli_mod._cache_put(traversal, [("policy", "safe")])
+    assert list(tmp_path.glob("*.json")) == [tmp_path / f"{key}.json"]
+    assert _cache_get(traversal) == [["policy", "safe"]]
+
+
 def test_cache_get_logs_warning_on_error(tmp_path, monkeypatch, caplog):
     """Cache read failure should log a warning."""
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     monkeypatch.setenv("AIPR_CACHE_DIR", str(cache_dir))
-    (cache_dir / "corrupt.json").write_text("{not valid json")
+    (cache_dir / f"{_cache_key('corrupt')}.json").write_text("{not valid json")
     with caplog.at_level(logging.WARNING):
         result = _cache_get("corrupt")
     assert result is None
@@ -193,4 +210,3 @@ def test_invalid_cache_env_vars_cli_and_defaults(monkeypatch, caplog):
     finally:
         monkeypatch.undo()
         importlib.reload(aipr.cache)
-
